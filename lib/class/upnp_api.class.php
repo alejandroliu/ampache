@@ -58,6 +58,42 @@ class Upnp_Api
 
         return $uuidstr;
     }
+    public static function buildSddpPacket($verb, $prefix, $nts, $host, $port, $rdev)
+    {
+        $strHeader  = $verb. "\r\n";
+        $strHeader .= 'HOST: ' . $host . ':' . $port . "\r\n";
+        $strHeader .= 'LOCATION: http://' . AmpConfig::get('http_host') . ':' . AmpConfig::get('http_port') . AmpConfig::get('raw_web_path') . '/upnp/MediaServerServiceDesc.php' . "\r\n";
+        $strHeader .= 'SERVER: DLNADOC/1.50 UPnP/1.0 Ampache/' . AmpConfig::get('version') . "\r\n";
+        $strHeader .= 'CACHE-CONTROL: max-age=1800' . "\r\n";
+	if ($nts)  $strHeader .= 'NTS: ssdp:alive' . "\r\n";
+        $uuidStr = self::get_uuidStr();
+        $rootDevice = $prefix . ': ' . $rdev . "\r\n";
+        $rootDevice .= 'USN: uuid:' . $uuidStr . '::' . $rdev . "\r\n" . "\r\n";    
+        return $strHeader . $rootDevice;
+    }
+
+    public static function sddpDaemon($interface, $host='239.255.255.250', $port= 1900)
+    {
+      self::sddpSend();	// Notify current running clients that we are starting...
+      $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+      socket_bind($sock, '0.0.0.0', $port);
+      socket_set_option($sock, IPPROTO_IP, MCAST_JOIN_GROUP, array('group'=>$host, 'interface' => $interface));
+      $buf = '';
+      $from = '';
+      $fport = '';
+      
+      while (socket_recvfrom($sock, $buf, 32768, 0, $from, $fport)) {
+	if (!preg_match('/M-SEARCH/', $buf)) continue;
+	foreach (array('upnp:rootdevice', 'urn:schemas-upnp-org:device:MediaServer:1', 'urn:schemas-upnp-org:service:ConnectionManager:1', 'urn:schemas-upnp-org:service:ContentDirectory:1') as $rdev) {
+	  if (!preg_match('/'.$rdev.'/', $buf)) continue;
+	  //echo("RCVMSG: [$from]:$fport\n$buf\n=\n");
+	  $msg = self::buildSddpPacket('HTTP/1.1 200 OK', 'ST', false, $host, $port, $rdev);
+	  //echo("SNDMSG: [$from];$fport\n$msg\n=\n");
+	  socket_sendto($sock, $msg, strlen($msg), 0, $from, $fport);
+	}
+      }
+      socket_close($sock);
+    }
 
     private static function udpSend($buf, $delay=15, $host="239.255.255.250", $port=1900)
     {
