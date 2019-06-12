@@ -9,7 +9,7 @@ if (!AmpConfig::get('upnp_backend')) {
 
 set_time_limit(600);
 
-header("Content-Type: text/html; charset=UTF-8");
+header("Content-Type: text/xml; charset=UTF-8");
 $rootMediaItems   = array();
 $rootMediaItems[] = Upnp_Api::_musicMetadata('');
 $rootMediaItems[] = Upnp_Api::_videoMetadata('');
